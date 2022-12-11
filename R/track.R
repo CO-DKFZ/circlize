@@ -93,6 +93,7 @@ circos.trackPlotRegion = function(
     bg.lwd = par("lwd"),
     panel.fun = function(x, y) {NULL},
     radius = NULL,
+    offset = NULL,
     factors = sectors) {
 
     if(!is.circos.initialized()) {
@@ -189,13 +190,41 @@ circos.trackPlotRegion = function(
 	}
 
 	if(flag_createNewTrack) {
-		if(track.index == 1) {
-			track.start = 1 - circos.par("track.margin")[2]
-		} else {
-			track.start = get.cell.meta.data("cell.bottom.radius", track.index = track.index - 1) -
-			              get.cell.meta.data("track.margin", track.index = track.index - 1)[1] -
-						  circos.par("track.margin")[2]
+		offset2 = rep(0, nlevel)
+		names(offset2) = all_le
+		if(!is.null(offset)) {
+			if(!is.null(names(offset))) {
+				nm = intersect(names(offset2), names(offset))
+				if(length(nm)) offset2[nm] = offset[nm]
+			} else {
+				if(length(offset) == 1) {
+					offset2 = rep(offset, nlevel)
+					names(offset2) = all_le
+				} else {
+					if(length(offset) != nlevel) {
+						stop_wrap("If `offset` is set as an unnamed vector, the length should be the same as the number of sectors.")
+					} else {
+						offset2 = offset
+						names(offset2) = all_le
+					}
+				}
+			}
 		}
+		
+		if(track.index == 1) {
+			track.start = sapply(all_le, function(s) {
+							offset = get.sector.data(s)[["offset"]]
+							1 - circos.par("track.margin")[2] + offset
+						})
+		} else {
+			track.start = sapply(all_le, function(s) {
+							get.cell.meta.data("cell.bottom.radius", sector.index = s, track.index = track.index - 1) -
+			              	get.cell.meta.data("track.margin", sector.index = s, track.index = track.index - 1)[1] -
+						  	circos.par("track.margin")[2]
+						  })
+		}
+		track.start = track.start + offset2
+
     } else {
 		track.start = get.cell.meta.data("cell.top.radius", track.index = track.index)
 	}
@@ -203,7 +232,7 @@ circos.trackPlotRegion = function(
     # check whether there is enough space for the new track and whether the new space
     # overlap with other tracks. Only for creatation mode.
 	if(flag_createNewTrack) {
-		check.track.position(track.index, track.start, track.height)
+		check.track.position(track.index, min(track.start), track.height)
     }
 
 	# if `ylim` is specified
@@ -227,7 +256,7 @@ circos.trackPlotRegion = function(
 		}
 
         # create plotting region for single cell
-        circos.createPlotRegion(track.start = track.start,
+        circos.createPlotRegion(track.start = if(length(track.start) == 1) track.start else track.start[i],
                               track.height = track.height, sector.index = all_le[i],
                               track.index = track.index,
                               ylim = ylim2, bg.col = bg.col[i],
@@ -739,17 +768,6 @@ highlight.sector = function(
 	}
 }
 
-parse_unit = function(str) {
-	if(grepl("^(-?\\d+(\\.\\d+)?)\\s*(mm|cm|inche|inches)$", str)) {
-		m = regexpr("^(-?\\d+(\\.\\d+)?)", str)
-		v = regmatches(str, m)
-		m = regexpr("(mm|cm|inche|inches)$", str)
-		u = regmatches(str, m)
-		return(list(value = as.numeric(v), unit = u))
-	} else {
-		stop_wrap("Format of the unit is incorrect. It should be like '2mm', '-2.1 inches'.")
-	}
-}
 
 # == title
 # Set gaps between tracks

@@ -598,7 +598,18 @@ circos.roundrect_pos = function(xleft, ybottom, xright, ytop, radius = "4mm",
         radius = str2unit(radius)
     }
 
-    cell_width = abs(diff(get.cell.meta.data("xplot", sector.index = sector.index, track.index = track.index)))/360*pi*2*mean(get.cell.meta.data("yplot", sector.index = sector.index, track.index = track.index))
+    if(xleft > xright) {
+        foo = xleft
+        xleft = xright
+        xright = foo
+    }
+    if(ybottom > ytop) {
+        foo = ybottom
+        ybottom = ytop
+        ytop = foo
+    }
+
+    cell_width = abs(diff(get.cell.meta.data("xplot", sector.index = sector.index, track.index = track.index)))/180*pi*mean(get.cell.meta.data("yplot", sector.index = sector.index, track.index = track.index))
     cell_height = abs(diff(get.cell.meta.data("yplot", sector.index = sector.index, track.index = track.index)))
 
     cell.xlim = get.cell.meta.data("cell.xlim", sector.index = sector.index, track.index = track.index)
@@ -608,13 +619,13 @@ circos.roundrect_pos = function(xleft, ybottom, xright, ytop, radius = "4mm",
 
     w = (xright - xleft)/cell.xrange*cell_width
     h = (ytop - ybottom)/cell.yrange*cell_height
-    radius = min(radius*2/w, radius*2/h, 0.5)
+    radius = min(radius, w/2, h/2)
 
     xleft0 = (xleft - cell.xlim[1])/cell.xrange*cell_width
     xright0 = (xright - cell.xlim[1])/cell.xrange*cell_width
     ybottom0 = (ybottom - cell.ylim[1])/cell.yrange*cell_height
     ytop0 = (ytop - cell.ylim[1])/cell.yrange*cell_height
-    pos = roundrect_pos(xleft0, ybottom0, xright0, ytop0, radius = radius, asp = 1)
+    pos = roundrect_pos(xleft0, ybottom0, xright0, ytop0, radius)
 
     pos$x = pos$x/cell_width*cell.xrange + cell.xlim[1]
     pos$y = pos$y/cell_height*cell.yrange + cell.ylim[1]
@@ -626,6 +637,46 @@ str2unit = function(str) {
     d = gsub("[^\\d]+$", "", str, perl = TRUE)
     u = gsub("^.*[\\d.]", "", str, perl = TRUE)
     convert_length(as.numeric(d), u)
+}
+
+# asp = 1
+roundrect_pos = function(xleft, ybottom, xright, ytop, r = 0.1) {
+    x = NULL
+    y = NULL
+
+    # left top 180 -> 90
+    df = polar2Cartesian(cbind(seq(180, 90, length.out = 20), rep(r,20)))
+    x = c(x, df[, 1] + xleft + r)
+    y = c(y, df[, 2] + ytop - r)
+
+    x = c(x, xleft + r, xright - r)
+    y = c(y, ytop, ytop)
+
+    # right top 90 -> 0
+    df = polar2Cartesian(cbind(seq(90, 0, length.out = 20), rep(r,20)))
+    x = c(x, df[, 1] + xright - r)
+    y = c(y, df[, 2] + ytop - r)
+
+    x = c(x, xright, xright)
+    y = c(y, ytop - r, ybottom + r)
+
+    # bottom right 0 - (-90)
+    df = polar2Cartesian(cbind(seq(0, -90, length.out = 20), rep(r,20)))
+    x = c(x, df[, 1] + xright - r)
+    y = c(y, df[, 2] + ybottom + r)
+
+    x = c(x, xright - r, xleft + r)
+    y = c(y, ybottom, ybottom)
+
+    # bottom left 270 - 180
+    df = polar2Cartesian(cbind(seq(270, 180, length.out = 20), rep(r,20)))
+    x = c(x, df[, 1] + xleft + r)
+    y = c(y, df[, 2] + ybottom + r)
+
+    x = c(x, xleft, xleft)
+    y = c(y, ybottom + r, ytop - r)
+
+    return(list(x = x, y = y))
 }
 
 # == title
@@ -1909,207 +1960,6 @@ circos.trackHist = function(
     return(invisible(NULL))
 }
 
-
-# == title
-# Add circular dendrograms
-#
-# == param
-# -dend A `stats::dendrogram` object.
-# -facing Is the dendromgrams facing inside to the circle or outside?
-# -max_height Maximum height of the dendrogram. This is important if more than one dendrograms
-#             are drawn in one track and making them comparable. The height of a dendrogram
-#             can be obtained by ``attr(dend, "height")``.
-# -use_x_attr Whether use the ``x`` attribute to determine node positions in the dendrogram, used internally.
-# -sector.index Index of sector.
-# -track.index Index of track.
-#
-# == details
-# Assuming there are ``n`` nodes in the dendrogram, the positions for leaves on x-axis are always ``0.5, 1.5, ..., n - 0.5``.
-# So you must be careful with ``xlim`` when you initialize the cirular layout.
-#
-# You can use the ``dendextend`` package to render the dendrograms.
-#
-# == seealso
-# https://jokergoo.github.io/circlize_book/book/high-level-plots.html#phylogenetic-trees
-#
-# == example
-# load(system.file(package = "circlize", "extdata", "bird.orders.RData"))
-#
-# labels = hc$labels  # name of birds
-# ct = cutree(hc, 6)  # cut tree into 6 pieces
-# n = length(labels)  # number of bird species
-# dend = as.dendrogram(hc)
-#
-# circos.par(cell.padding = c(0, 0, 0, 0))
-# circos.initialize(sectors = "a", xlim = c(0, n)) # only one sector
-# max_height = attr(dend, "height")  # maximum height of the trees
-# circos.trackPlotRegion(ylim = c(0, 1), bg.border = NA, track.height = 0.3,
-#     panel.fun = function(x, y) {
-#         for(i in seq_len(n)) {
-#             circos.text(i-0.5, 0, labels[i], adj = c(0, 0.5),
-#                 facing = "clockwise", niceFacing = TRUE,
-#                 col = ct[labels[i]], cex = 0.7)
-#         }
-# })
-#
-# suppressPackageStartupMessages(require(dendextend))
-# dend = color_branches(dend, k = 6, col = 1:6)
-#
-# circos.trackPlotRegion(ylim = c(0, max_height), bg.border = NA,
-#     track.height = 0.4, panel.fun = function(x, y) {
-#         circos.dendrogram(dend, max_height = max_height)
-# })
-# circos.clear()
-circos.dendrogram = function(
-    dend,
-    facing = c("outside", "inside"),
-    max_height = NULL,
-    use_x_attr = FALSE,
-    sector.index = get.current.sector.index(),
-    track.index = get.current.track.index()) {
-
-    os = get.current.sector.index()
-    ot = get.current.track.index()
-    set.current.cell(sector.index, track.index)
-    on.exit(set.current.cell(os, ot))
-    
-    facing = match.arg(facing)[1]
-
-    if(is.null(max_height)) {
-        max_height = attr(dend, "height")
-    }
-
-    is.leaf = function(object) {
-        leaf = attr(object, "leaf")
-        if(is.null(leaf)) {
-            FALSE
-        } else {
-            leaf
-        }
-    }
-
-    use_x_attr = use_x_attr
-
-    lines_par = function(col = par("col"), lty = par("lty"), lwd = par("lwd"), ...) {
-        return(list(col = col, lty = lty, lwd = lwd))
-    }
-
-    points_par = function(col = par("col"), pch = par("pch"), cex = par("cex"), ...) {
-        return(list(col = col, pch = pch, cex = cex))
-    }
-
-    draw.d = function(dend, max_height, facing = "outside", max_width = 0) {
-        leaf = attr(dend, "leaf")
-        height = attr(dend, "height")
-        midpoint = attr(dend, "midpoint")
-        n = length(dend)
-
-        xl = numeric(n)
-        yl = numeric(n)
-        for(i in seq_len(n)) {
-            if(use_x_attr) {
-                xl[i] = attr(dend[[i]], "x")
-            } else {
-                if(is.leaf(dend[[i]])) {
-                    xl[i] = x[as.character(attr(dend[[i]], "label"))]
-                } else {
-                    xl[i] = attr(dend[[i]], "midpoint") + x[as.character(labels(dend[[i]]))[1]]
-                }
-            }
-            yl[i] = attr(dend[[i]], "height")
-        }
-
-        # graphic parameter for current branch
-        # only for lines, there are lwd, col, lty
-        edge_par_lt = vector("list", n)
-        for(i in seq_len(n)) {
-            edge_par_lt[[i]] = do.call("lines_par", as.list(attr(dend[[i]], "edgePar")))  # as.list to convert NULL to list()
-        }
-        node_par = attr(dend, "nodePar")
-        if(!is.null(node_par)) node_par = do.call("points_par", as.list(attr(dend, "nodePar")))
-
-        # plot the connection line
-        if(facing == "outside") {
-            if(n == 1) {
-                circos.lines(c(xl[1], xl[1]), max_height - c(yl[1], height), 
-                    col = edge_par_lt[[1]]$col, lty = edge_par_lt[[1]]$lty, lwd = edge_par_lt[[1]]$lwd, straight = TRUE)
-            } else {
-                circos.lines(c(xl[1], xl[1]), max_height - c(yl[1], height), 
-                    col = edge_par_lt[[1]]$col, lty = edge_par_lt[[1]]$lty, lwd = edge_par_lt[[1]]$lwd, straight = TRUE)
-                circos.lines(c(xl[1], (xl[1]+xl[2])/2), max_height - c(height, height), 
-                    col = edge_par_lt[[1]]$col, lty = edge_par_lt[[1]]$lty, lwd = edge_par_lt[[1]]$lwd)
-                if(n > 2) {
-                    for(i in seq(2, n-1)) {
-                        circos.lines(c(xl[i], xl[i]), max_height - c(yl[i], height), 
-                            col = edge_par_lt[[i]]$col, lty = edge_par_lt[[i]]$lty, lwd = edge_par_lt[[i]]$lwd, straight = TRUE)
-                        circos.lines(c((xl[i-1]+xl[i])/2, (xl[i]+xl[i+1])/2), max_height - c(height, height), 
-                            col = edge_par_lt[[i]]$col, lty = edge_par_lt[[i]]$lty, lwd = edge_par_lt[[i]]$lwd)
-                    }
-                }
-                circos.lines(c(xl[n], xl[n]), max_height - c(yl[n], height), 
-                    col = edge_par_lt[[n]]$col, lty = edge_par_lt[[n]]$lty, lwd = edge_par_lt[[n]]$lwd, straight = TRUE)
-                circos.lines(c(xl[n], (xl[n]+xl[n-1])/2), max_height - c(height, height), 
-                    col = edge_par_lt[[n]]$col, lty = edge_par_lt[[n]]$lty, lwd = edge_par_lt[[n]]$lwd)
-            }
-            if(!is.null(node_par)) {
-                circos.points(mean(xl)/2, max_height - height, col = node_par$col, pch = node_par$pch, cex = node_par$cex)
-            }
-        } else if(facing == "inside") {
-            if(n == 1) {
-                circos.lines(c(xl[1], xl[1]), c(yl[1], height), 
-                    col = edge_par_lt[[1]]$col, lty = edge_par_lt[[1]]$lty, lwd = edge_par_lt[[1]]$lwd, straight = TRUE)
-            } else {
-                circos.lines(c(xl[1], xl[1]), c(yl[1], height), 
-                    col = edge_par_lt[[1]]$col, lty = edge_par_lt[[1]]$lty, lwd = edge_par_lt[[1]]$lwd, straight = TRUE)
-                circos.lines(c(xl[1], (xl[1]+xl[2])/2), c(height, height), 
-                    col = edge_par_lt[[1]]$col, lty = edge_par_lt[[1]]$lty, lwd = edge_par_lt[[1]]$lwd)
-                if(n > 2) {
-                    for(i in seq(2, n-1)) {
-                        circos.lines(c(xl[i], xl[i]), c(yl[i], height), 
-                            col = edge_par_lt[[i]]$col, lty = edge_par_lt[[i]]$lty, lwd = edge_par_lt[[i]]$lwd, straight = TRUE)
-                        circos.lines(c((xl[i-1]+xl[i])/2, (xl[i]+xl[i+1])/2), c(height, height), 
-                            col = edge_par_lt[[i]]$col, lty = edge_par_lt[[i]]$lty, lwd = edge_par_lt[[i]]$lwd)
-                    }
-                }
-                circos.lines(c(xl[n], xl[n]), c(yl[n], height), 
-                    col = edge_par_lt[[n]]$col, lty = edge_par_lt[[n]]$lty, lwd = edge_par_lt[[n]]$lwd, straight = TRUE)
-                circos.lines(c(xl[n], (xl[n]+xl[n-1])/2), c(height, height), 
-                    col = edge_par_lt[[n]]$col, lty = edge_par_lt[[n]]$lty, lwd = edge_par_lt[[n]]$lwd)
-            }
-            if(!is.null(node_par)) {
-                circos.points(mean(xl)/2, height, col = node_par$col, pch = node_par$pch, cex = node_par$cex)
-            }
-        }
-
-        # do it recursively
-        for(i in seq_len(n)) {
-            if(is.leaf(dend[[i]])) {
-                node_par = attr(dend[[i]], "nodePar")
-                if(!is.null(node_par)) node_par = do.call("points_par", as.list(attr(dend[[i]], "nodePar")))
-                if(facing == "outside") {
-                    if(!is.null(node_par)) {
-                        circos.points(xl[i], max_height, col = node_par$col, pch = node_par$pch, cex = node_par$cex)
-                    }
-                } else if(facing == "inside") {
-                    if(!is.null(node_par)) {
-                        circos.points(xl[i], 0, col = node_par$col, pch = node_par$pch, cex = node_par$cex)
-                    }
-                }
-            } else {
-                draw.d(dend[[i]], max_height, facing, max_width)
-            }
-        }
-    }
-
-    labels = as.character(labels(dend))
-    x = seq_along(labels) - 0.5
-
-    names(x) = labels
-    n = length(labels)
-
-    if(!is.leaf(dend)) draw.d(dend, max_height, facing, max_width = n)
-}
-
 # == title
 # Draw barplots
 #
@@ -2387,7 +2237,7 @@ circos.violin = function(value, pos, violin_width = 0.8,
         if(length(cex) == 1) cex = rep(cex, n)
         if(length(pch) == 1) pch = rep(pch, n)
         if(length(pt.col) == 1) pt.col = rep(pt.col, n)
-        if(length(violin_width) == 1) violin_width = rep(violin_width, length(value))
+        # if(length(violin_width) == 1) violin_width = rep(violin_width, length(value))
 
         density_list = lapply(value, density, na.rm = TRUE)
         
@@ -2768,157 +2618,3 @@ circos.labels = function(
 }
 
 
-# == title
-# Add a stacked text track
-#
-# == param
-# -sectors A vector of sector names.
-# -x  A vector of x-coordinates.
-# -text  A vector of texts.
-# -bg.border  Background color.
-# -bg.col  Colors for borders.
-# -niceFacing Current not supported.
-# -side Side of the track.
-# -col Text colors.
-# -font Text fontfaces.
-# -cex Font sizes.
-# -family Font families.
-#
-# == details
-# The height of the track is not fixed, so you may need to manually adjust the track height.
-#
-# == example
-# \dontrun{
-# circos.par$circle.margin = 0.5
-# circos.par$cell.padding = rep(0, 4)
-# circos.par$track.margin = rep(0, 2)
-#
-# circos.initialize(sectors = letters[1:4], xlim = c(0, 1))
-#
-# sectors = sample(letters[1:4], 40, replace = TRUE)
-# x = runif(40)
-# text = sapply(letters[sample(26, 40, replace = TRUE)], function(x) strrep(x, sample(4:6, 1)))
-# circos.stackedText(sectors, x, text, bg.col = "#EEEEEE")
-#
-# circos.track(ylim = c(0, 1))
-# circos.clear()
-#
-# #### genome plot
-# circos.par$track.margin = rep(0, 2)
-# circos.par$cell.padding = rep(0, 4)
-#
-# circos.initializeWithIdeogram(plotType = NULL)
-# bed = generateRandomBed(50)
-# text = sapply(
-#     letters[sample(26, nrow(bed), replace = TRUE)], 
-#     function(x) strrep(x, sample(4:6, 1))
-# )
-# bed$text = text
-#
-# circos.stackedText(bed[, 1], bed[, 2], bed$text, cex = 0.7)
-# circos.genomicIdeogram()
-# circos.clear()
-#
-# }
-circos.stackedText = function(sectors, x, text, 
-    col = par("col"), font = par("font"), cex = par("cex"), family = par("family"),
-    bg.border = "black", bg.col = "#FF8080",
-    niceFacing = FALSE, 
-    side = c("outside", "inside")) {
-
-    side = match.arg(side)[1]
-
-    if(niceFacing) {
-        stop_wrap("Current `niceFacing` is not supported.")
-    }
-
-    n = length(x)
-
-    if(length(bg.border) == 1) {
-        bg.border = rep(bg.border, n)
-    }
-    if(length(bg.col) == 1) {
-        bg.col = rep(bg.col, n)
-    }
-    if(length(col) == 1) {
-        col = rep(col, n)
-    }
-    if(length(font) == 1) {
-        font = rep(font, n)
-    }
-    if(length(cex) == 1) {
-        cex = rep(cex, n)
-    }
-
-    op = circos.par("points.overflow.warning")
-    circos.par("points.overflow.warning" = FALSE)
-
-    circos.track(ylim = c(0, 1), bg.border = NA)
-
-    df = refer_to_one_sector(sectors, x)
-    set.current.sector.index(df[1, 1])
-
-    x = df$x
-    text = text[df$order]
-
-    tw = circos.strwidth(text, cex = cex, font = font, family = family)
-    th = circos.strheight(text, cex = cex, font = font, family = family)
-    ta = circos.strAscent(text, cex = cex, font = font, family = family)
-    td = circos.strDescent(text, cex = cex, font = font, family = family)
-
-    lt = stack_text(x, text, strwidth = circos.strwidth, strheight = circos.strheight, margin = 0.2,
-        cex = cex, font = font, family = family)
-
-    if(side == "outside") {
-        y = mm_y(4.5)
-    } else {
-        y = 1 - mm_y(4.5)
-    }
-
-    for(i in seq_along(lt)) {
-        ind = lt[[i]]
-        if(side == "outside") {
-            circos.segments(x[ind], 0, x[ind], y, col = bg.border)
-            y = y + mm_y(0.5) + max(td[ind] + ta[ind]) + mm_y(0.5) + mm_y(0.5)
-        } else {
-            circos.segments(x[ind], 1, x[ind], y, col = bg.border)
-            y = y - mm_y(0.5) - max(td[ind] + ta[ind]) - mm_y(0.5) - mm_y(0.5)
-        }
-        
-    }
-
-    if(side == "outside") {
-        y = mm_y(4.5)
-    } else {
-        y = 1 - mm_y(4.5)
-    }
-
-    for(i in seq_along(lt)) {
-        ind = lt[[i]]
-        if(side == "outside") {
-            tw = circos.strwidth(text, h = y, cex = cex, font = font, family = family)
-            circos.rect(x[ind] - tw[ind]/2 - mm_x(0.5), 
-                y, 
-                x[ind] + tw[ind]/2 + mm_x(0.5), 
-                y + mm_y(0.5) + td[ind] + ta[ind] + mm_y(0.5), 
-                col = bg.col[ind], border = bg.border[ind])
-            circos.text(x[ind], y + mm_y(0.5) + td[ind] + th[ind]/2, 
-                text[ind], facing = "bending.inside", niceFacing = niceFacing, 
-                col = col[ind], cex = cex[ind], font = font[ind], family = family)
-            y = y + mm_y(0.5) + max(td[ind] + ta[ind]) + mm_y(0.5) + mm_y(0.5)
-        } else {
-            tw = circos.strwidth(text, h = y, cex = cex, font = font, family = family)
-            circos.rect(x[ind] - tw[ind]/2 - mm_x(0.5), 
-                y, 
-                x[ind] + tw[ind]/2 + mm_x(0.5), 
-                y - mm_y(0.5) - td[ind] - ta[ind] - mm_y(0.5), 
-                col = bg.col[ind], border = bg.border[ind])
-            circos.text(x[ind], y - mm_y(0.5) - (ta[ind] - th[ind]/2), 
-                text[ind], facing = "bending.inside", niceFacing = niceFacing,
-                col = col[ind], cex = cex[ind], font = font[ind], family = family)
-            y = y - mm_y(0.5) - max(td[ind] + ta[ind]) - mm_y(0.5) - mm_y(0.5)
-        }
-    }
-
-    circos.par("points.overflow.warning" = op)
-}

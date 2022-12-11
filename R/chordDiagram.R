@@ -1514,3 +1514,29 @@ calc_gap = function(x1, x2, big.gap = 10, small.gap = 1) {
 	(blank.degree - sum_gap2)/2
 }
 
+
+# == title
+# Convert adjacency matrix to an adjacency list
+#
+# == param
+# -mat A numeric matrix.
+# -keep.zero Whether to keep the interactions with value zero.
+#
+# == example
+# set.seed(999)
+# mat = matrix(sample(18, 18), 3, 6) 
+# rownames(mat) = paste0("S", 1:3)
+# colnames(mat) = paste0("E", 1:6)
+# adjacencyMatrix2List(mat)
+adjacencyMatrix2List = function(mat, keep.zero = FALSE) {
+    if(is.null(rownames(mat))) rownames(mat) = as.character(seq_len(nrow(mat)))
+    if(is.null(colnames(mat))) colnames(mat) = as.character(seq_len(ncol(mat)))
+    df = data.frame(from = rep(rownames(mat), times = ncol(mat)),
+        to = rep(colnames(mat), each = nrow(mat)),
+        value = as.vector(mat),
+        stringsAsFactors = FALSE)
+    if(!keep.zero) df = df[df$value != 0, , drop = FALSE]
+    return(df)
+}
+
+

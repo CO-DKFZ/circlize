@@ -53,9 +53,9 @@ circos.link = function(
 	point1,
 	sector.index2,
 	point2,
-	rou = get_most_inside_radius(),
-	rou1 = rou,
-	rou2 = rou,
+	rou = NULL,
+	rou1 = get_most_inside_radius(sector.index1),
+	rou2 = get_most_inside_radius(sector.index2),
 	h = NULL,
 	h.ratio = 0.5,
 	w = 1,
@@ -77,6 +77,11 @@ circos.link = function(
 
    sector.data1 = get.sector.data(sector.index1)
    sector.data2 = get.sector.data(sector.index2)
+
+   if(!is.null(rou)) {
+   	rou1 = rou
+   	rou2 = rou
+   }
 
    if(is.data.frame(point1)) {
    		point1 = unlist(point1)

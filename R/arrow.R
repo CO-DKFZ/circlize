@@ -73,8 +73,7 @@
 # circos.clear()
 #
 circos.arrow = function(
-	x1, 
-	x2, 
+	x1, x2, 
 	y = get.cell.meta.data("ycenter"), 
 	width = get.cell.meta.data("yrange")/2, 
 	sector.index = get.current.sector.index(), 

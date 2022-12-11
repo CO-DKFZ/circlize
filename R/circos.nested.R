@@ -247,25 +247,3 @@ The ordered sectors in outter ring: ", paste(f1_sectors, collapse = ', '), ". Th
 ring: ", paste0(f2_sectors, collapse = ', '), ".\n"))
 	}
 }
-
-dev.off2 = function () {
-    i1 = dev.prev()
-    i2 = dev.cur()
-    if (i1 == 2) {
-        dev.set(i1)
-    }
-    else if (i1 > 2) {
-        i11 = dev.prev(i1)
-        if (names(i11) == "RStudioGD") {
-            dev.set(i11)
-        }
-        else {
-            dev.set(i1)
-        }
-    }
-    dev.off(i2)
-}
-
-strwrap2 = function(x) {
-	paste(strwrap(x), collapse = "\n")
-}
